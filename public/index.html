@@ -990,29 +990,62 @@ function resign(){
 }
 
 // ─── NETWORK (Pusher) ─────────────────────────────────────────────────────────
-let pusher=null, channel=null, GAME_ID=null;
+let pusher=null, channel=null, GAME_ID=null, myRole=null;
+// myRole: 'host' | 'guest'
 
 function initPusher(cfg){
   pusher = new Pusher(cfg.key, { cluster: cfg.cluster, forceTLS: true });
-  return pusher;
 }
 
 async function sendEvent(type, data){
   try {
-    await fetch('/api/game', {
+    const res = await fetch('/api/game', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({type, gameId: GAME_ID, data})
     });
+    if(!res.ok) console.error('sendEvent HTTP error', res.status);
   } catch(e){ console.error('sendEvent failed', e); }
 }
 
-function subscribeChannel(gameId, onEvent){
+function subscribeChannel(gameId){
   channel = pusher.subscribe('game-'+gameId);
-  channel.bind('move',       d => onEvent('move',d));
-  channel.bind('player-joined', d => onEvent('join',d));
-  channel.bind('resign',     d => onEvent('resign',d));
-  channel.bind('pong',       d => onEvent('pong',d));
+
+  // Called on BOTH sides for every event
+  channel.bind('move', data => {
+    if(S.myColor) applyRemote(data);
+  });
+
+  channel.bind('resign', () => {
+    if(S.myColor && !S.over){
+      S.over=true;
+      showGameOver(S.myColor==='w'?'White Wins':'Black Wins','by Resignation');
+    }
+  });
+
+  // ── HANDSHAKE ──
+  // 1. Guest arrives  → sends 'guest-arrived'
+  // 2. Host receives  → sends 'host-ready', starts as White
+  // 3. Guest receives → starts as Black
+
+  channel.bind('guest-arrived', () => {
+    if(myRole !== 'host') return;
+    // Host confirms and starts
+    sendEvent('join', {ready: true});
+    showNotification('Opponent joined!');
+    setStatus('Connected — Game in progress');
+    startGame('w');
+  });
+
+  channel.bind('player-joined', (data) => {
+    if(myRole !== 'guest') return;
+    if(data && data.ready){
+      // Host confirmed — guest starts
+      showNotification('Game started!');
+      setStatus('Connected — Game in progress');
+      startGame('b');
+    }
+  });
 }
 
 function genId(){ return Math.random().toString(36).slice(2,10); }
@@ -1021,19 +1054,15 @@ async function createGame(){
   const cfg=getConfig();
   if(!cfg){ showSetup(); return; }
   GAME_ID=genId();
+  myRole='host';
   document.getElementById('create-btn').disabled=true;
   initPusher(cfg);
-  subscribeChannel(GAME_ID, (type,data)=>{
-    if(type==='join'){ showNotification('Opponent joined!'); setStatus('Connected — Game in progress'); startGame('w'); }
-    if(type==='move'&&S.myColor) applyRemote(data);
-    if(type==='resign'&&S.myColor){ S.over=true; showGameOver(S.myColor==='w'?'White Wins':'Black Wins','by Resignation'); }
-  });
+  subscribeChannel(GAME_ID);
   const url=location.origin+location.pathname+'?game='+GAME_ID;
   document.getElementById('share-url').textContent=url;
   document.getElementById('share-panel').style.display='flex';
   setStatus('Waiting for opponent…');
   window._shareURL=url;
-  // Keep-alive ping
   setInterval(()=>sendEvent('ping',{}), 25000);
 }
 
@@ -1044,15 +1073,23 @@ async function joinGame(){
   if(id.includes('?game=')) id=id.split('?game=')[1].split('&')[0];
   if(!id){ showNotification('Enter a game code or link'); return; }
   GAME_ID=id;
+  myRole='guest';
   initPusher(cfg);
-  subscribeChannel(GAME_ID, (type,data)=>{
-    if(type==='move'&&S.myColor) applyRemote(data);
-    if(type==='resign'&&S.myColor){ S.over=true; showGameOver(S.myColor==='b'?'Black Wins':'White Wins','by Resignation'); }
+  subscribeChannel(GAME_ID);
+
+  // Wait for Pusher subscription to be fully active before announcing
+  channel.bind('pusher:subscription_succeeded', async () => {
+    await sendEvent('join', {arrived: true});
   });
-  await sendEvent('join',{ts:Date.now()});
-  startGame('b');
-  setStatus('Connected — Game in progress');
-  showNotification('Joined game!');
+
+  // Fallback: if subscription_succeeded already fired or doesn't fire, try after delay
+  setTimeout(async () => {
+    if(!S.myColor){ // not yet started
+      await sendEvent('join', {arrived: true});
+    }
+  }, 1500);
+
+  setStatus('Connecting…');
 }
 
 function startGame(myColor){
@@ -1068,8 +1105,7 @@ window.addEventListener('load',()=>{
   const gameId=params.get('game');
   if(gameId){
     document.getElementById('join-id').value=gameId;
-    // Delay slightly so Pusher loads
-    setTimeout(joinGame, 300);
+    setTimeout(joinGame, 400);
   }
 });
 

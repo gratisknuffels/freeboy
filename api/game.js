@@ -25,7 +25,13 @@ module.exports = async (req, res) => {
     if (type === 'move') {
       await pusher.trigger(channel, 'move', data);
     } else if (type === 'join') {
-      await pusher.trigger(channel, 'player-joined', data);
+      // data.arrived  = guest announcing presence  → fires 'guest-arrived' to host
+      // data.ready    = host confirming            → fires 'player-joined' to guest
+      if (data && data.arrived) {
+        await pusher.trigger(channel, 'guest-arrived', data);
+      } else {
+        await pusher.trigger(channel, 'player-joined', data);
+      }
     } else if (type === 'resign') {
       await pusher.trigger(channel, 'resign', data);
     } else if (type === 'ping') {
