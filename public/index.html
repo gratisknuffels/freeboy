@@ -638,6 +638,46 @@
 </head>
 <body>
 
+<!-- Name entry modal — rendered first so it always appears on top -->
+<div id="name-modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;z-index:9999;">
+  <div style="background:#231a0a;border:1px solid #c9933a;padding:44px;text-align:center;width:90%;max-width:360px;">
+    <h2 style="font-family:'Playfair Display',serif;color:#c9933a;font-size:1.6rem;margin-bottom:8px;">Welcome</h2>
+    <p style="font-size:0.72rem;color:rgba(240,230,204,0.4);letter-spacing:0.08em;margin-bottom:24px;">Enter your name to begin</p>
+    <input id="player-name-input" maxlength="20" placeholder="Your name…" autocomplete="off"
+      style="width:100%;padding:13px 16px;background:rgba(255,255,255,0.05);border:none;border-bottom:2px solid #c9933a;color:#f0e6cc;font-family:'Playfair Display',serif;font-size:1.2rem;text-align:center;outline:none;margin-bottom:20px;display:block;box-sizing:border-box;" />
+    <button id="name-continue-btn"
+      style="width:100%;padding:14px;background:#c9933a;border:none;color:#1a1208;font-family:'DM Mono',monospace;font-size:0.8rem;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;">
+      Continue ›
+    </button>
+  </div>
+</div>
+<script>
+  // Self-contained name modal logic — runs immediately, no dependencies
+  (function() {
+    var modal = document.getElementById('name-modal');
+    var input = document.getElementById('player-name-input');
+    var btn   = document.getElementById('name-continue-btn');
+
+    function proceed() {
+      var val = input.value.trim();
+      if (!val) { input.style.borderBottomColor = '#e74c3c'; input.focus(); return; }
+      input.style.borderBottomColor = '#c9933a';
+      modal.style.display = 'none';
+      // myName and _pendingAction are defined in the main script below
+      window.myName = val;
+      if (window._pendingAction) {
+        var fn = window._pendingAction;
+        window._pendingAction = null;
+        fn();
+      }
+    }
+
+    btn.addEventListener('click', proceed);
+    input.addEventListener('keydown', function(e) { if (e.key === 'Enter') proceed(); });
+    setTimeout(function() { input.focus(); }, 100);
+  })();
+</script>
+
 <header>
   <div class="logo">♟ Freeboy<span>Chess</span></div>
   <div id="status-bar">—</div>
@@ -789,30 +829,19 @@ console.log('[FreeboyChess] Pusher key injected:', ENV.PUSHER_KEY ? ENV.PUSHER_K
 
 
 // ─── PLAYER NAME ─────────────────────────────────────────────────────────────
-let myName = '';
+// myName is set by the name modal inline script above
+// _pendingAction is the callback to run after name entry
+let myName = window.myName || '';
 let opponentName = '';
-let _pendingAction = null; // callback to run after name is entered
+let _pendingAction = null;
 
 function askName(callback) {
+  // If name already entered, run callback immediately
+  if (myName) { callback(); return; }
   _pendingAction = callback;
   document.getElementById('name-modal').style.display = 'flex';
   setTimeout(() => document.getElementById('player-name-input').focus(), 50);
 }
-
-function submitName(){
-  const val = document.getElementById('player-name-input').value.trim();
-  if(!val){ showNotification('Please enter your name'); return; }
-  myName = val;
-  document.getElementById('name-modal').style.display = 'none';
-  if(_pendingAction){ const fn = _pendingAction; _pendingAction = null; fn(); }
-}
-
-// Allow Enter key to submit
-window.addEventListener('load', () => {
-  document.getElementById('player-name-input').addEventListener('keydown', e => {
-    if(e.key === 'Enter') submitName();
-  });
-});
 
 // ─── CHESS ENGINE ────────────────────────────────────────────────────────────
 const PIECES = {
@@ -1239,16 +1268,6 @@ function showNotification(msg){
   setTimeout(()=>el.classList.remove('show'),2800);
 }
 </script>
-
-<!-- Name entry modal -->
-<div id="name-modal">
-  <div class="modal-box" style="padding:40px 44px">
-    <h3>Welcome</h3>
-    <p>Enter your name to begin</p>
-    <input class="name-input" id="player-name-input" maxlength="20" placeholder="Your name…" autocomplete="off" />
-    <button class="btn btn-primary" style="width:100%" onclick="submitName()">Continue</button>
-  </div>
-</div>
 
 </body>
 </html>
