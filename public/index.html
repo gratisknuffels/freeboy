@@ -786,12 +786,20 @@ function getConfig() {
 // ─── PLAYER NAME ─────────────────────────────────────────────────────────────
 let myName = '';
 let opponentName = '';
+let _pendingAction = null; // callback to run after name is entered
+
+function askName(callback) {
+  _pendingAction = callback;
+  document.getElementById('name-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('player-name-input').focus(), 50);
+}
 
 function submitName(){
   const val = document.getElementById('player-name-input').value.trim();
   if(!val){ showNotification('Please enter your name'); return; }
   myName = val;
   document.getElementById('name-modal').style.display = 'none';
+  if(_pendingAction){ const fn = _pendingAction; _pendingAction = null; fn(); }
 }
 
 // Allow Enter key to submit
@@ -1143,6 +1151,7 @@ function genId(){ return Math.random().toString(36).slice(2,10); }
 async function createGame(){
   const cfg=getConfig();
   if(!cfg){ showNotification('Pusher keys not configured — check Vercel env vars'); return; }
+  if(!myName){ askName(() => createGame()); return; }
   GAME_ID=genId();
   myRole='host';
   document.getElementById('create-btn').disabled=true;
@@ -1159,6 +1168,7 @@ async function createGame(){
 async function joinGame(){
   const cfg=getConfig();
   if(!cfg){ showNotification('Pusher keys not configured — check Vercel env vars'); return; }
+  if(!myName){ askName(() => joinGame()); return; }
   let id=document.getElementById('join-id').value.trim();
   if(id.includes('?game=')) id=id.split('?game=')[1].split('&')[0];
   if(!id){ showNotification('Enter a game code or link'); return; }
@@ -1195,7 +1205,7 @@ window.addEventListener('load',()=>{
   const gameId=params.get('game');
   if(gameId){
     document.getElementById('join-id').value=gameId;
-    setTimeout(joinGame, 400);
+    joinGame();
   }
 });
 
@@ -1216,7 +1226,7 @@ function showNotification(msg){
 </script>
 
 <!-- Name entry modal -->
-<div id="name-modal">
+<div id="name-modal" style="display:none">
   <div class="modal-box" style="padding:40px 44px">
     <h3>Welcome</h3>
     <p>Enter your name to begin</p>
