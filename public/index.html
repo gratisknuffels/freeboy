@@ -692,36 +692,17 @@
 
 <script>
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-// These are injected by Vercel env vars at build time via a server-side template,
-// OR can be stored locally for testing.
+// PUSHER_KEY and PUSHER_CLUSTER are injected server-side by /api/index.js
 const ENV = {
   PUSHER_KEY:     '__PUSHER_KEY__',
   PUSHER_CLUSTER: '__PUSHER_CLUSTER__',
 };
 
 function getConfig() {
-  // If env vars are injected (real deployment), use them
   if (ENV.PUSHER_KEY && !ENV.PUSHER_KEY.startsWith('__')) {
     return { key: ENV.PUSHER_KEY, cluster: ENV.PUSHER_CLUSTER };
   }
-  // Fall back to localStorage (for local testing)
-  const stored = localStorage.getItem('freeboychess_cfg');
-  if (stored) return JSON.parse(stored);
   return null;
-}
-
-function saveConfig() {
-  const cfg = {
-    appId:   document.getElementById('cfg-app-id').value.trim(),
-    key:     document.getElementById('cfg-key').value.trim(),
-    secret:  document.getElementById('cfg-secret').value.trim(),
-    cluster: document.getElementById('cfg-cluster').value.trim(),
-  };
-  if (!cfg.key || !cfg.cluster) { showNotification('Key and Cluster are required'); return; }
-  localStorage.setItem('freeboychess_cfg', JSON.stringify(cfg));
-  document.getElementById('setup-screen').style.display = 'none';
-  document.getElementById('lobby').style.display = 'flex';
-  showNotification('Config saved!');
 }
 
 // ─── CHESS ENGINE ────────────────────────────────────────────────────────────
@@ -1052,7 +1033,7 @@ function genId(){ return Math.random().toString(36).slice(2,10); }
 
 async function createGame(){
   const cfg=getConfig();
-  if(!cfg){ showSetup(); return; }
+  if(!cfg){ showNotification('Pusher keys not configured — check Vercel env vars'); return; }
   GAME_ID=genId();
   myRole='host';
   document.getElementById('create-btn').disabled=true;
@@ -1068,7 +1049,7 @@ async function createGame(){
 
 async function joinGame(){
   const cfg=getConfig();
-  if(!cfg){ showSetup(); return; }
+  if(!cfg){ showNotification('Pusher keys not configured — check Vercel env vars'); return; }
   let id=document.getElementById('join-id').value.trim();
   if(id.includes('?game=')) id=id.split('?game=')[1].split('&')[0];
   if(!id){ showNotification('Enter a game code or link'); return; }
@@ -1110,10 +1091,7 @@ window.addEventListener('load',()=>{
 });
 
 // ─── SETUP / CONFIG UI ───────────────────────────────────────────────────────
-function showSetup(){
-  document.getElementById('lobby').style.display='none';
-  document.getElementById('setup-screen').style.display='flex';
-}
+function showSetup(){ showNotification('Pusher keys not configured — check Vercel env vars'); }
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
 function copyLink(){
