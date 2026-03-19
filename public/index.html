@@ -829,15 +829,14 @@ console.log('[FreeboyChess] Pusher key injected:', ENV.PUSHER_KEY ? ENV.PUSHER_K
 
 
 // ─── PLAYER NAME ─────────────────────────────────────────────────────────────
-// myName is set by the name modal inline script above
-// _pendingAction is the callback to run after name entry
-let myName = window.myName || '';
+// window.myName lives on window so both the modal script and main script share it
+window.myName = window.myName || '';
 let opponentName = '';
 let _pendingAction = null;
 
 function askName(callback) {
   // If name already entered, run callback immediately
-  if (myName) { callback(); return; }
+  if (window.myName) { callback(); return; }
   _pendingAction = callback;
   document.getElementById('name-modal').style.display = 'flex';
   setTimeout(() => document.getElementById('player-name-input').focus(), 50);
@@ -1027,7 +1026,7 @@ function renderBoard() {
   document.getElementById('card-top').classList.toggle('active',!myTurn&&!S.over);
   const myPiece = S.myColor==='w' ? '♔' : '♚';
   const oppPiece = S.myColor==='w' ? '♚' : '♔';
-  document.getElementById('name-bottom').textContent = (myName || 'You') + ' ' + myPiece;
+  document.getElementById('name-bottom').textContent = (window.myName || 'You') + ' ' + myPiece;
   document.getElementById('name-top').textContent = (opponentName || 'Opponent') + ' ' + oppPiece;
 
   // Captures
@@ -1163,7 +1162,7 @@ function subscribeChannel(gameId){
     if(myRole !== 'host') return;
     opponentName = (data && data.name) ? data.name : 'Opponent';
     // Host confirms and sends its own name back
-    sendEvent('join', {ready: true, name: myName});
+    sendEvent('join', {ready: true, name: window.myName});
     showNotification(opponentName + ' joined!');
     setStatus('Connected — Game in progress');
     startGame('w');
@@ -1183,7 +1182,7 @@ function subscribeChannel(gameId){
 function genId(){ return Math.random().toString(36).slice(2,10); }
 
 async function createGame(){
-  if(!myName){ askName(() => createGame()); return; }
+  if(!window.myName){ askName(() => createGame()); return; }
   const cfg=getConfig();
   if(!cfg){ showNotification('⚠ Pusher keys not set — check Vercel env vars'); return; }
   GAME_ID=genId();
@@ -1207,7 +1206,7 @@ async function createGame(){
 
 async function joinGame(){
   const cfg=getConfig();
-  if(!myName){ askName(() => joinGame()); return; }
+  if(!window.myName){ askName(() => joinGame()); return; }
   if(!cfg){ showNotification('⚠ Pusher keys not set — check Vercel env vars'); return; }
   let id=document.getElementById('join-id').value.trim();
   if(id.includes('?game=')) id=id.split('?game=')[1].split('&')[0];
@@ -1219,13 +1218,13 @@ async function joinGame(){
 
   // Wait for Pusher subscription to be fully active before announcing
   channel.bind('pusher:subscription_succeeded', async () => {
-    await sendEvent('join', {arrived: true, name: myName});
+    await sendEvent('join', {arrived: true, name: window.myName});
   });
 
   // Fallback: if subscription_succeeded already fired or doesn't fire, try after delay
   setTimeout(async () => {
     if(!S.myColor){ // not yet started
-      await sendEvent('join', {arrived: true, name: myName});
+      await sendEvent('join', {arrived: true, name: window.myName});
     }
   }, 1500);
 
