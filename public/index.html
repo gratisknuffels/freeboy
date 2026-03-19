@@ -1204,8 +1204,12 @@ window.addEventListener('load',()=>{
   const params=new URLSearchParams(location.search);
   const gameId=params.get('game');
   if(gameId){
+    // Came via shared link — ask name then join
     document.getElementById('join-id').value=gameId;
-    joinGame();
+    askName(() => joinGame());
+  } else {
+    // Host landing on lobby — ask name then show lobby
+    askName(() => {});
   }
 });
 
