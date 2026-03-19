@@ -776,11 +776,16 @@ const ENV = {
 };
 
 function getConfig() {
-  if (ENV.PUSHER_KEY && !ENV.PUSHER_KEY.startsWith('__')) {
-    return { key: ENV.PUSHER_KEY, cluster: ENV.PUSHER_CLUSTER };
+  const key = ENV.PUSHER_KEY;
+  const cluster = ENV.PUSHER_CLUSTER;
+  if (key && key.length > 0 && !key.startsWith('__')) {
+    return { key, cluster };
   }
   return null;
 }
+
+// Debug: log what keys were injected (remove after testing)
+console.log('[FreeboyChess] Pusher key injected:', ENV.PUSHER_KEY ? ENV.PUSHER_KEY.slice(0,6)+'...' : 'MISSING');
 
 
 // ─── PLAYER NAME ─────────────────────────────────────────────────────────────
@@ -1149,14 +1154,20 @@ function subscribeChannel(gameId){
 function genId(){ return Math.random().toString(36).slice(2,10); }
 
 async function createGame(){
-  const cfg=getConfig();
-  if(!cfg){ showNotification('Pusher keys not configured — check Vercel env vars'); return; }
   if(!myName){ askName(() => createGame()); return; }
+  const cfg=getConfig();
+  if(!cfg){ showNotification('⚠ Pusher keys not set — check Vercel env vars'); return; }
   GAME_ID=genId();
   myRole='host';
   document.getElementById('create-btn').disabled=true;
-  initPusher(cfg);
-  subscribeChannel(GAME_ID);
+  try {
+    initPusher(cfg);
+    subscribeChannel(GAME_ID);
+  } catch(e) {
+    document.getElementById('create-btn').disabled=false;
+    showNotification('Connection error: ' + e.message);
+    return;
+  }
   const url=location.origin+location.pathname+'?game='+GAME_ID;
   document.getElementById('share-url').textContent=url;
   document.getElementById('share-panel').style.display='flex';
@@ -1167,8 +1178,8 @@ async function createGame(){
 
 async function joinGame(){
   const cfg=getConfig();
-  if(!cfg){ showNotification('Pusher keys not configured — check Vercel env vars'); return; }
   if(!myName){ askName(() => joinGame()); return; }
+  if(!cfg){ showNotification('⚠ Pusher keys not set — check Vercel env vars'); return; }
   let id=document.getElementById('join-id').value.trim();
   if(id.includes('?game=')) id=id.split('?game=')[1].split('&')[0];
   if(!id){ showNotification('Enter a game code or link'); return; }
