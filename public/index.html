@@ -97,6 +97,7 @@ header {
   display:flex; align-items:center; justify-content:center;
   cursor:pointer; position:relative; transition:background 0.1s; user-select:none;
 }
+.sq.no-move { cursor:not-allowed; }
 .sq.light { background:var(--light-sq); } .sq.dark { background:var(--dark-sq); }
 .sq.selected { background:var(--hl) !important; }
 .sq.hint::after { content:''; position:absolute; width:32%; height:32%; border-radius:50%; background:rgba(0,0,0,0.18); pointer-events:none; }
@@ -384,7 +385,7 @@ function anyLegal(board, co, ep, cr) {
   return false;
 }
 
-function inCheck(board, co) { const [kr,kc]=kingPos(board,co); return attacked(board,kr,kc,opp(co)); }
+function inCheck(board, co) { const pos=kingPos(board,co); if(!pos) return false; const [kr,kc]=pos; return attacked(board,kr,kc,opp(co)); }
 
 function toAlg(fr, to, board, promo) {
   const p=board[fr.r][fr.c], tp=pt(p), cap=board[to.r][to.c]||to.ep;
@@ -423,13 +424,14 @@ function render() {
       const h=S.legal.find(m=>m.r===r&&m.c===c);
       if(h) sq.classList.add(S.board[r][c]?'capture':'hint');
     }
-    if(inCheck(S.board,S.turn)){ const [kr,kc]=kingPos(S.board,S.turn); if(r===kr&&c===kc) sq.classList.add('incheck'); }
+    if(inCheck(S.board,S.turn)){ const kp=kingPos(S.board,S.turn); if(kp&&r===kp[0]&&c===kp[1]) sq.classList.add('incheck'); }
     if(S.board[r][c]){
       const sp=document.createElement('span');
       sp.className='piece '+S.board[r][c][0];
       sp.textContent=GLYPHS[S.board[r][c]]||'';
       sq.appendChild(sp);
     }
+    if(S.myColor && S.turn !== S.myColor) sq.classList.add('no-move');
     sq.addEventListener('click',()=>handleClick(r,c));
     el.appendChild(sq);
   }
@@ -547,7 +549,10 @@ function initPusher(){
 
 function subscribe(gameId){
   channel = pusher.subscribe('game-'+gameId);
-  channel.bind('move', d => { if(S.myColor) applyRemote(d); });
+  channel.bind('move', d => { 
+    // Only apply remote moves — ignore echoes of our own moves
+    if(S.myColor && S.turn !== S.myColor) applyRemote(d); 
+  });
   channel.bind('resign', () => { if(S.myColor&&!S.over){ S.over=true; showGameOver(S.myColor==='w'?'White Wins':'Black Wins','by Resignation'); }});
   channel.bind('guest-arrived', d => {
     if(myRole!=='host') return;
